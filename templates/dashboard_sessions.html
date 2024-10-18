@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Dashboard Sessions</title>
+    <!-- Tailwind CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss/dist/tailwind.min.css" rel="stylesheet">
+    <!-- Preline UI -->
+    <script src="https://unpkg.com/preline"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script> <!-- Add jQuery for AJAX -->
+    <style>
+        /* Ensure html and body take full height */
+        html, body {
+            height: 100%;
+        }
+
+        /* Hide all tab contents by default */
+        .tab-content { display: none; }
+        .tab-content.active { display: flex; }
+
+        pre { 
+            white-space: pre-wrap; 
+            word-wrap: break-word; 
+            overflow-x: auto; 
+            max-width: 100%; 
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white h-full">
+    <div class="flex flex-col h-full">
+        <!-- Header -->
+        <div class="container mx-auto px-4 py-4 flex items-center justify-between" style="/*! width: 100% !important; */max-width: 100%;">
+            <h2 class="text-2xl font-bold">Welcome, {{ current_user.username }}</h2>
+            <div>
+                <a href="{{ url_for('settings') }}" class="text-blue-400 hover:underline mr-4">Settings</a>
+                <a href="{{ url_for('logout') }}" class="text-blue-400 hover:underline">Logout</a>
+            </div>
+        </div>
+
+        <div class="flex flex-1 overflow-hidden">
+            <!-- Sidebar for Chat Sessions (Vertical Tabs) -->
+            <div class="w-full md:w-1/4 bg-gray-800 rounded-lg p-4 overflow-y-auto" style="width: 10%">
+                <h3 class="text-lg font-semibold mb-4">Chat Sessions</h3>
+
+                <!-- New Chat Session Form -->
+                <form id="new-session-form" method="POST" action="{{ url_for('new_chat_session') }}" class="space-y-4 mb-8">
+                    <button type="submit" class="w-full px-4 py-2 bg-green-600 hover:bg-green-700 rounded-md">Create New Session</button>
+                </form>
+
+                <!-- List of Chat Sessions -->
+                <div id="session-tabs" class="space-y-2">
+                    {% for session in sessions | sort(attribute='lastupdated', reverse=true) %}
+                        <div class="cursor-pointer p-2 bg-gray-700 rounded-md text-blue-400 hover:bg-gray-600 hover:text-blue-500 session-tab" 
+                             data-session-id="{{ session.id }}">
+                            <strong class="text-white">
+                                {% if session.chats[-1] is defined %}
+                                    {{ session.chats[-1].prompt | truncate(20) }}
+                                {% endif %}
+                            </strong>
+                            <br />
+                            {% if session.chats[-1] is defined %}
+                                {% set time_diff = (session.chats[-1].timestamp.now() - session.chats[-1].timestamp) %}
+                                {% set hours = (time_diff.total_seconds() / 3600) | int %}
+                                {% if hours < 1 %}
+                                    {% set minutes = (time_diff.total_seconds() / 60) | int %}
+                                    {{ minutes }} minute{% if minutes != 1 %}s{% endif %} ago
+                                {% else %}
+                                    {{ time_diff.days }} day{% if time_diff.days != 1 %}s{% endif %} ago
+                                {% endif %}
+                            {% else %}
+                                New Session 
+                            {% endif %}
+                            <br />
+                            {% if session.chats[0] is defined %}
+                                {{ session.chats[0].prompt | truncate(20) }}
+                            {% endif %}
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- Chat Display Area -->
+            <div class="w-full md:w-3/4 bg-gray-800 rounded-lg p-4 ml-0 md:ml-4 mt-0 flex flex-col" style="width: 90%">
+                <div id="chat-container" class="flex flex-col flex-1 h-full">
+                    {% if sessions is not defined or not sessions %}
+                        <span class="Header">Click Create New Session to Start Woosting!</span>
+                    {% endif %}
+                    {% for session in sessions %}
+                        <div id="session-{{ session.id }}" class="tab-content flex flex-col flex-1 h-full">
+                            <h3 class="text-xl font-semibold mb-4">{{ session.session_name }}</h3>
+
+                            <div id="chats-{{ session.id }}" class="flex-1 space-y-4 overflow-y-auto">
+                                {% for chat in session.chats | reverse %}
+                                    <div class="p-4 bg-gray-700 rounded-md" data-chat-id="{{ chat.id }}">
+                                        <p><strong>Model:</strong> {{ session.model_used }}</p>
+                                        <p><strong>Prompt:</strong> {{ chat.prompt }}</p>
+                                        <p><pre>{{ chat.response or 'Processing...' }}</pre></p>
+                                        <p class="text-sm text-gray-400">{{ chat.timestamp.strftime('%Y-%m-%d %I:%M %p') }}</p>
+                                    </div>
+                                {% endfor %}
+                            </div>
+
+                            <!-- Form to submit a new prompt for the session -->
+                            <form class="summon-agent-form space-y-4 mt-auto" data-session-id="{{ session.id }}">
+                                <div>
+                                    <label class="block mb-1" for="agent-type-{{ session.id }}">Agent Type:</label>
+                                    <select name="agent_type" required class="w-full px-4 py-2 bg-gray-700 text-white rounded-md" 
+                                            id="agent-type-{{ session.id }}">
+                                        <option value="openai" {% if session.agent_type == 'openai' %} selected {% endif %}>OpenAI</option>
+                                        <option value="anthropic" {% if session.agent_type == 'anthropic' %} selected {% endif %}>Anthropic</option>
+                                    </select>
+                                </div>
+
+                                <div id="model-dropdown-container-{{ session.id }}" class="{% if session.agent_type %}block{% else %}hidden{% endif %}">
+                                    <label class="block mb-1" for="model-used-{{ session.id }}">Model:</label>
+                                    <select name="model_used" class="w-full px-4 py-2 bg-gray-700 text-white rounded-md" id="model-used-{{ session.id }}">
+                                        {% if session.agent_type == 'openai' %}
+                                            <option value="gpt-4o" {% if session.model_used == 'gpt-4o' %} selected {% endif %}>GPT-4o</option>
+                                            <option value="gpt-4o-mini" {% if session.model_used == 'gpt-4o-mini' %} selected {% endif %}>GPT-4o Mini</option>
+                                            <option value="o1-preview" {% if session.model_used == 'o1-preview' %} selected {% endif %}>O1 Preview</option>
+                                            <option value="o1-mini" {% if session.model_used == 'o1-mini' %} selected {% endif %}>O1 Mini</option>
+                                        {% elif session.agent_type == 'anthropic' %}
+                                            <option value="claude-3-5-sonnet-20240620" {% if session.model_used == 'claude-3-5-sonnet-20240620' %} selected {% endif %}>Claude</option>
+                                            <option value="claude-3-haiku-20240307" {% if session.model_used == 'claude-3-haiku-20240307' %} selected {% endif %}>Claude</option>
+                                        {% endif %}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block mb-1" for="role-type{{ session.id }}">Model Role (won't work with o1 models):</label>
+                                    <select name="role_type" class="w-full px-4 py-2 bg-gray-700 text-white rounded-md" 
+                                            id="role-type-{{ session.id }}">
+                                        <option value="">Select a role...</option>
+                                        <option value="You are a **UX Designer/Developer (React.js Specialist)** responsible for designing and building intuitive, responsive web interfaces that provide an exceptional user experience. You'll collaborate with product teams to translate user needs into visually appealing and functional designs, while implementing them using React.js to create interactive and scalable applications. Your role includes creating wireframes, prototypes, and reusable React components that follow design system principles, ensuring performance optimization, accessibility, and consistency across the product. You will also conduct user testing and gather feedback to iterate on designs and improve functionality. With expertise in modern JavaScript, HTML5, CSS3, and design tools like Figma or Sketch, you'll work closely with developers and product managers to deliver seamless, user-centered web experiences. Your knowledge of design patterns, accessibility best practices, and frontend testing will be key to building dynamic, high-quality applications.">UX Designer/Dev</option>
+                                        <option value="You are a Technical Architect, a key player in bridging the gap between high-level project plans and detailed technical execution. Your role is crucial in transforming ideas and business requirements into actionable, scalable, and efficient technical solutions. Understanding the Vision: You begin by deeply understanding the project’s objectives, business goals, and user needs. Working closely with project managers, stakeholders, and team leads, you ensure that you have a clear picture of what the final product should achieve. Defining the Technical Roadmap: You take this high-level vision and break it down into technical components. This involves making important decisions such as: Which programming languages to use for the project (e.g., Python, JavaScript, etc.).
+                                                Which database to choose (SQL, NoSQL, or a cloud-based solution like PostgreSQL or MongoDB).
+                                                Deciding on the infrastructure and cloud services (AWS, Google Cloud, or Azure).
+                                                Selecting frameworks, tools, and libraries that align with performance, scalability, and maintainability needs.
+                                                Designing the System Architecture: You create a blueprint for how the system will be built. This includes:
+                                                The architecture of the application (monolithic, microservices, or serverless).
+                                                How components like the front end, back end, and database interact.
+                                                Setting up APIs, authentication methods, and external integrations.
+                                                Ensuring the design is scalable, secure, and efficient for long-term use">Technical Architect / Solutions Architect</option>
+                                        <!-- Add other options as needed -->
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block mb-1" for="prompt-{{ session.id }}">Enter your prompt:</label>
+                                    <textarea name="prompt" rows="4" required class="w-full px-4 py-2 bg-gray-700 text-white rounded-md" id="prompt-{{ session.id }}"></textarea>
+                                </div>
+                                
+                                <input type="hidden" name="session_id" id="session-id-{{ session.id }}" value="{{ session.id }}">
+
+                                <div>
+                                    <button type="submit" class="w-full px-4 py-2 bg-green-600 hover:bg-green-700 rounded-md" id="submit-btn-{{ session.id }}">Summon AI Agent</button>
+                                </div>
+                            </form>
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript to manage tab switching and handle AJAX for new sessions -->
+    <script>
+    $(document).ready(function() {
+
+        // Show model dropdown if agent type is selected
+        const models = {
+            'openai': ['gpt-4o', 'gpt-4o-mini', 'o1-preview', 'o1-mini'],
+            'anthropic': ['claude-3-5-sonnet-20240620', 'claude-3-haiku-20240307']
+        };
+
+        // Function to populate model dropdown based on agent type
+        function populateModelDropdown(sessionId, agentType, selectedModel) {
+            const modelDropdown = $(`#model-used-${sessionId}`);
+            modelDropdown.empty(); // Clear existing options
+
+            if (agentType in models) {
+                models[agentType].forEach(model => {
+                    modelDropdown.append($('<option>', {
+                        value: model,
+                        text: model,
+                        selected: model === selectedModel // Set selected based on saved model
+                    }));
+                });
+                $(`#model-dropdown-container-${sessionId}`).show();
+            } else {
+                $(`#model-dropdown-container-${sessionId}`).hide();
+            }
+        }
+
+        // Initialize the model dropdowns for existing sessions
+        $('[id^="agent-type-"]').each(function() {
+            const sessionId = $(this).attr('id').split('-')[2]; // Extract session ID
+            const agentType = $(this).val(); // Get the selected agent type
+            const selectedModel = $(`#model-used-${sessionId}`).val(); // Get the saved model
+            populateModelDropdown(sessionId, agentType, selectedModel);
+        });
+
+        // Show/hide model dropdown based on agent type change
+        $('[id^="agent-type-"]').on('change', function() {
+            const sessionId = $(this).attr('id').split('-')[2]; // Extract session ID
+            const selectedAgentType = $(this).val();
+            const selectedModel = $(`#model-used-${sessionId}`).val(); // Get the currently selected model
+            populateModelDropdown(sessionId, selectedAgentType, selectedModel);
+        });
+
+        // Handle form submission via AJAX
+        $('.summon-agent-form').on('submit', function(e) {
+            e.preventDefault(); // Prevent default form submission
+            const formData = $(this).serialize(); // Serialize the form data
+            const sessionId = $(this).data('session-id'); // Get the session ID from data attribute
+            const prompt = $(this).find('textarea[name="prompt"]').val(); // Get the user prompt
+            const model_used = $(this).find('select[name="model_used"]').val(); // Get the model used
+            const date = new Date();
+            const options = {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: true // To use AM/PM format
+            };
+
+            // Get the formatted string with slashes (month/day/year by default)
+            let formattedDate = date.toLocaleString('en-US', options);
+
+            // Extract date and time parts
+            const [datePart, timePart] = formattedDate.split(', ');
+
+            // Rearrange the date part to YYYY-MM-DD format
+            const [month, day, year] = datePart.split('/'); // Default format is MM/DD/YYYY
+            const formattedDatePart = `${year}-${month}-${day}`;
+
+            // Combine the reordered date and time parts
+            const finalFormattedDate = `${formattedDatePart} ${timePart}`;
+            const tempChatId = `temp-${sessionId}-${Date.now()}`;  // Temporary ID for the chat
+
+            // Immediately update the chat window with the user's prompt
+            const chatHtml = `
+                <div class="p-4 bg-gray-700 rounded-md" id="${tempChatId}">
+                    <p><strong>Model:</strong> ${model_used}</p>
+                    <p><strong>Prompt:</strong> ${prompt}</p>
+                    <p>Processing...</p>
+                    <p class="text-sm text-gray-400">${finalFormattedDate}</p>
+                </div>`;
+                
+            $(`#chats-${sessionId}`).prepend(chatHtml);
+
+            // Send AJAX request to the server
+            $.ajax({
+                url: '/summon_agent',
+                type: 'POST',
+                data: formData,
+                success: function(response) {
+                    // Append new chat to the chat container
+                    const chatId = response.chat_id;
+             
+                    $(`#${tempChatId}`).attr('data-chat-id', chatId);
+                    // Start polling for updates (pass chatId)
+                    const intervalId = setInterval(function() {
+                        pollForUpdates(chatId, intervalId);
+                    }, 500);
+                      
+                    var truncatedPrompt = response.prompt.substring(0, 13);
+                    
+                    if (truncatedPrompt) {
+                        if (response.prompt.length >= 20) { 
+                            truncatedPrompt += "..."; 
+                        }
+                        
+                        const sessionTab = $(`.session-tab[data-session-id="${sessionId}"]`);
+                        const now = new Date();
+                        const chatTimestamp = new Date(finalFormattedDate);
+                        const timeDiff = now - chatTimestamp;
+                        const minutes = Math.floor(timeDiff / 60000);
+                        const hours = Math.floor(minutes / 60);
+                        const days = Math.floor(hours / 24);
+                        
+                        let timeAgo;
+                        if (days > 0) {
+                            timeAgo = `${days} day${days !== 1 ? 's' : ''} ago`;
+                        } else if (hours > 0) {
+                            timeAgo = `${hours} hour${hours !== 1 ? 's' : ''} ago`;
+                        } else {
+                            timeAgo = `${minutes} minute${minutes !== 1 ? 's' : ''} ago`;
+                        }
+                        
+                        const initialPrompt = sessionTab.contents().filter(function() {
+                            return this.nodeType === 3; // Filter for text nodes
+                        }).last().text().trim() || sessionTab.find('br').first().prev().text().trim();
+                        
+                        sessionTab.html(`
+                            <strong style="color:white">${truncatedPrompt}</strong>
+                            <br />
+                            ${timeAgo}
+                            <br />
+                            ${initialPrompt}
+                        `);
+                        
+                        // Store the initial prompt if it's not already set
+                        if (!sessionTab.data('initial-prompt')) {
+                            sessionTab.data('initial-prompt', initialPrompt);
+                        }
+                    }
+                },
+                error: function(xhr) {
+                    console.error('Error in AJAX request:', xhr.responseText);
+                    alert('An error occurred: ' + xhr.responseText);
+                }
+            });
+        });
+
+        // Polling function for updates
+        function pollForUpdates(chatId, intervalId) {
+            $.get(`/check_response/${chatId}`, function(data) {
+                if (data.response) {
+                    // Find the chat block by its data-chat-id and update the response
+                    const chatDiv = $(`div[data-chat-id="${chatId}"]`);
+                    chatDiv.find('p:contains("Processing")').html(`<pre>${data.response}</pre>`);
+                    
+                    // Stop polling once the response is received
+                    clearInterval(intervalId);
+                }
+            }).fail(function(xhr) {
+                console.error('Error polling for updates:', xhr.responseText);
+            });
+        }
+
+        // Initialize the first tab to show
+        $('.tab-content').hide();
+        $('.tab-content').first().show().addClass('active');
+
+        // Handle session tab clicks
+        $('.session-tab').on('click', function() {
+            const sessionId = $(this).data('session-id');
+
+            // Remove active class from all tabs and contents
+            $('.session-tab').removeClass('active');
+            $('.tab-content').removeClass('active').hide();
+
+            // Add active class to the clicked tab and corresponding content
+            $(this).addClass('active');
+            $(`#session-${sessionId}`).addClass('active').show();
+        });
+    });
+    </script>
+</body>
+</html>

@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Dashboard Sessions (mIRC Style)</title>
+    <!-- Tailwind CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss/dist/tailwind.min.css" rel="stylesheet">
+    <!-- Preline UI -->
+    <script src="https://unpkg.com/preline"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <link rel="stylesheet" href="/static/dracula.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <style>
+        body {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            margin: 0;
+            font-family: 'Courier New', monospace;
+            background-color: #000080;
+            color: #FFFFFF;
+        }
+        .header {
+            background-color: #000080;
+            padding: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .main-content {
+            display: flex;
+            flex-direction: column;
+            flex: 1;
+            overflow: hidden;
+        }
+        .chat-area {
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px;
+            background-color: #000000;
+        }
+        .input-area {
+            background-color: #000080;
+            padding: 10px;
+        }
+        .tabs {
+            display: flex;
+            overflow-x: auto;
+            background-color: #000080;
+            border-top: 1px solid #FFFFFF;
+        }
+        .tab {
+            padding: 5px 15px;
+            cursor: pointer;
+            white-space: nowrap;
+            border-right: 1px solid #FFFFFF;
+        }
+        .tab.active {
+            background-color: #0000FF;
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
+        .chat-message {
+            margin-bottom: 5px;
+        }
+        .prompt {
+            color: #FF0000;
+        }
+        .response {
+            color: #00FF00;
+        }
+        input[type="text"], textarea, select {
+            background-color: #000000;
+            color: #FFFFFF;
+            border: 1px solid #FFFFFF;
+            margin-right: 5px;
+        }
+        button {
+            background-color: #0000FF;
+            color: #FFFFFF;
+            border: 1px solid #FFFFFF;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #000080;
+        }
+        .summon-agent-form {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        .summon-agent-form > * {
+            margin-right: 5px;
+            margin-bottom: 5px;
+        }
+        .summon-agent-form textarea {
+            flex-grow: 1;
+            width: calc(100% - 10px);
+        }
+    </style>
+
+</head>
+<body>
+    <div class="header">
+        <h2>Welcome, {{ current_user.username }}</h2>
+        <div>
+            <a href="{{ url_for('settings') }}" class="text-white hover:underline mr-4">Settings</a>
+            <a href="{{ url_for('logout') }}" class="text-white hover:underline">Logout</a>
+        </div>
+    </div>
+
+    <div class="main-content">
+        <div class="chat-area" id="chat-container">
+            {% for session in sessions %}
+                <div id="session-{{ session.id }}" class="tab-content">
+                    <h3>Session: {{ session.session_name }}</h3>
+                    <div id="chats-{{ session.id }}" class="space-y-4">
+                        {% for chat in session.chats | reverse %}
+                            <div class="chat-message" data-chat-id="{{ chat.id }}">
+                                <span class="prompt">&lt;{{ session.model_used }}&gt; {{ chat.prompt }}</span><br>
+                                <span class="response"><pre><code>{{ chat.response or 'Processing...' }}</code></pre></span>
+                            </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+
+        <div class="input-area">
+            <form id="new-session-form" method="POST" action="{{ url_for('new_chat_session') }}" class="mb-2">
+                <button type="submit">New Session</button>
+            </form>
+
+            <form class="summon-agent-form" data-session-id="{{ sessions[0].id if sessions else '' }}">
+                <select name="agent_type" required id="agent-type">
+                    <option value="openai">OpenAI</option>
+                    <option value="anthropic">Anthropic</option>
+                </select>
+                <select name="model_used" id="model-used"></select>
+                <select name="role_type" id="role-type">
+                                    <option value="">Select a role...</option>
+                                    <option value="You are a professional who develops and optimizes machine learning models to improve performance and scalability.">Machine Learning Engineer</option>
+                                    <option value="You are a specialist who analyzes large datasets to extract insights and build predictive models for decision-making.">Data Scientist</option>
+                                    <option value="You are a developer who designs and implements software systems that support various applications and services.">Software Engineer</option>
+                                    <option value="You are a visionary who defines product strategy and ensures alignment with customer needs and business goals.">Product Manager</option>
+                                    <option value="You are an overseer who manages the planning and execution of development projects, ensuring timely delivery and quality.">Technical Program Manager</option>
+                                    <option value="You are a helper who provides technical support and troubleshooting assistance to users of various products.">Customer Support Specialist</option>
+                                    <option value="You are a manager who oversees infrastructure and deployment pipelines to ensure smooth operations of applications.">DevOps Engineer</option>
+                                    <option value="You are a builder who constructs and maintains data pipelines and databases used for analysis and reporting.">Data Engineer</option>
+                                    <option value="You are a designer who creates scalable cloud infrastructure for application deployment and data storage.">Cloud Infrastructure Architect</option>
+                                    <option value="You are a tester who ensures software systems function accurately and meet performance standards.">Quality Assurance Engineer</option>
+                                    <option value="You are a strategist who identifies opportunities for product expansion and establishes strategic partnerships.">Business Development Manager</option>
+                                    <option value="You are a researcher who studies user behavior to inform product design and improve usability.">User Experience (UX) Researcher</option>
+                                    <option value="You are a reviewer who monitors and reviews user-generated content to ensure compliance with guidelines and policies.">Content Moderator</option>
+                                    <option value="You are a protector who implements security measures to safeguard systems and data from threats and vulnerabilities.">Security Engineer</option>
+                                    <option value="You are a versatile developer who builds both front-end and back-end components of applications.">Full Stack Developer</option>
+                                    <option value="You are an overseer who manages day-to-day operations to ensure efficiency and productivity within the organization.">Operations Manager</option>
+                                    <option value="You are a promoter who develops and executes marketing strategies to enhance product visibility and sales.">Marketing Manager</option>
+                                    <option value="You are a technical expert who supports the sales team by providing expertise during the sales process.">Sales Engineer</option>
+                                    <option value="You are a facilitator who manages recruitment, employee relations, and organizational development.">Human Resources Specialist</option>
+                                    <option value="You are a legal advisor who provides guidance on various issues, including contracts and regulatory compliance.">Legal Counsel</option>
+                                    <option value="You are a compliance expert who ensures systems adhere to data protection regulations and best practices.">Data Privacy Officer</option>
+                                    <option value="You are a planner who conducts financial analysis and reporting to support business decisions.">Financial Analyst</option>
+                                    <option value="You are a talent scout who sources and interviews candidates to fill open positions within the company.">Recruiter</option>
+                                    <option value="You are a communicator who creates documentation and instructional content for products and services.">Technical Writer</option>
+                                    <option value="You are a coordinator who oversees logistics and supply chain operations to ensure timely product delivery.">Supply Chain Manager</option>
+                                    <option value="You are a relationship manager who maintains and strengthens connections with key clients, addressing their needs.">Account Manager</option>
+                                    <option value="You are a communicator who manages the company's image and media relations to promote a positive public perception.">Public Relations Specialist</option>
+                                    <option value="You are an organizer who provides administrative support to executives, handling scheduling and correspondence.">Executive Assistant</option>
+                                    <option value="You are a creator who develops visual content for marketing, branding, and communication efforts.">Graphic Designer</option>
+                                    <option value="You are an educator who develops and delivers training programs for employees and customers.">Training Specialist</option>
+                                    <option value="You are a planner who organizes corporate events, including conferences, meetings, and product launches.">Event Coordinator</option>
+                                    <option value="You are a supervisor who ensures that workplace facilities are maintained and meet the needs of the organization.">Facilities Manager</option>
+                                    <option value="You are a troubleshooter who assists users with hardware and software issues to ensure smooth technology operation.">IT Support Specialist</option>
+                                    <option value="You are a marketer who creates and manages online campaigns to drive engagement and conversion.">Digital Marketing Specialist</option>
+                                    <option value="You are a planner who develops content plans to align with marketing goals and audience needs.">Content Strategist</option>
+                                    <option value="You are a steward who ensures that the brand message is consistent across all channels and platforms.">Brand Manager</option>
+                                    <option value="You are a guardian who ensures that the organization adheres to legal standards and internal policies.">Compliance Officer</option>
+                                    <option value="You are a maintainer who manages and configures computer systems and servers for optimal performance.">Systems Administrator</option>
+                                    <option value="You are a designer who develops and manages network infrastructure to ensure reliable connectivity.">Network Engineer</option>
+                                    <option value="You are an investigator who conducts research and analyzes data to support business decisions.">Research Analyst</option>
+                                    <option value="You are a manager who oversees financial reporting, budgeting, and compliance with regulations.">Financial Controller</option>
+                                    <option value="You are a creator who designs products with a focus on user experience and functionality.">Product Designer</option>
+                                    <option value="You are a builder who creates and maintains websites to ensure they are functional and user-friendly.">Web Developer</option>
+                                    <option value="You are a problem solver who provides technical assistance and solutions to customers using software products.">Technical Support Engineer</option>
+                                    <option value="You are a communicator who manages the company's social media presence and engages with the audience.">Social Media Manager</option>
+                                    <option value="You are a leader who oversees the sales team and develops strategies to achieve sales targets.">Sales Manager</option>
+                                    <option value="You are a monitor who manages stock levels and ensures the timely replenishment of inventory.">Inventory Manager</option>
+                                    <option value="You are a visual creator who produces images and designs for various media and marketing needs.">Graphic Artist</option>
+                                    <option value="You are a helper who provides on-site support for computer systems and software in the workplace.">Desktop Support Technician</option>
+                                    <option value="You are a strategist who develops marketing plans to promote specific products and drive sales.">Product Marketing Manager</option>
+                                    <option value="You are a director who oversees online sales operations and strategies to increase revenue.">E-commerce Manager</option>
+                                    <option value="You are a leader who sets the technology vision and strategy for the organization.">Chief Technology Officer (CTO)</option>
+                                    <option value="You are a financial leader who manages the company's finances and provides strategic guidance.">Chief Financial Officer (CFO)</option>
+                                    <option value="You are an educator who develops and implements training programs for employees to enhance skills.">Corporate Trainer</option>
+                                    <option value="You are a researcher who gathers and analyzes data on consumer preferences and market trends.">Market Research Analyst</option>
+                                    <option value="You are a champion who ensures a positive and seamless experience for customers throughout their journey.">Customer Experience Manager</option>
+                                    <option value="You are a maintainer who manages and supports the organization’s computer networks and systems.">Network Administrator</option>
+                                    <option value="You are a researcher who analyzes policies and their impacts to provide recommendations for improvement.">Policy Analyst</option>
+                                
+                </select>
+                <textarea name="prompt" rows="3" required placeholder="Enter prompt"></textarea>
+                <input type="hidden" name="session_id" id="session-id" value="{{ sessions[0].id if sessions else '' }}">
+                <button type="submit">Summon AI</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="tabs" id="session-tabs">
+        {% for session in sessions %}
+            <div class="tab" data-session-id="{{ session.id }}">
+                {% if session.chats %}
+                    {{ session.chats[0].prompt[:10] }}...
+                {% else %}
+                    {{ session.session_name }}
+                {% endif %}
+            </div>
+        {% endfor %}
+    </div>
+
+    <script>
+    $(document).ready(function() {
+        hljs.highlightAll();
+        const models = {
+            'openai': ['gpt-4o', 'gpt-4o-mini', 'o1-preview', 'o1-mini'],
+            'anthropic': ['claude-3-5-sonnet-20240620', 'claude-3-haiku-20240307']
+        };
+
+        function populateModelDropdown(agentType, selectedModel) {
+            const modelDropdown = $('#model-used');
+            modelDropdown.empty();
+
+            if (agentType in models) {
+                models[agentType].forEach(model => {
+                    modelDropdown.append($('<option>', {
+                        value: model,
+                        text: model,
+                        selected: model === selectedModel
+                    }));
+                });
+            }
+        }
+
+        $('#agent-type').on('change', function() {
+            const selectedAgentType = $(this).val();
+            populateModelDropdown(selectedAgentType);
+        });
+
+        $('.summon-agent-form').on('submit', function(e) {
+            e.preventDefault();
+            const formData = $(this).serialize();
+            const sessionId = $(this).data('session-id');
+            const prompt = $(this).find('textarea[name="prompt"]').val();
+            const model_used = $(this).find('select[name="model_used"]').val();
+            const date = new Date().toLocaleString('en-US', {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: true
+            });
+
+            const tempChatId = `temp-${sessionId}-${Date.now()}`;
+            const chatHtml = `
+                <div class="chat-message" id="${tempChatId}">
+                    <span class="prompt">&lt;${model_used}&gt; ${prompt}</span><br>
+                    <span class="response">Processing...</span>
+                </div>`;
+
+            $(`#chats-${sessionId}`).prepend(chatHtml);
+
+            $.ajax({
+                url: '/summon_agent',
+                type: 'POST',
+                data: formData,
+                success: function(response) {
+                    const chatId = response.chat_id;
+                    $(`#${tempChatId}`).attr('data-chat-id', chatId);
+                    const intervalId = setInterval(function() {
+                        pollForUpdates(chatId, intervalId);
+                    }, 500);
+
+                    updateSessionTab(sessionId, prompt);
+                },
+                error: function(xhr) {
+                    console.error('Error in AJAX request:', xhr.responseText);
+                    alert('An error occurred: ' + xhr.responseText);
+                }
+            });
+
+
+        });
+
+        function pollForUpdates(chatId, intervalId) {
+            $.get(`/check_response/${chatId}`, function(data) {
+                if (data.response) {
+                    const chatDiv = $(`div[data-chat-id="${chatId}"]`);
+                    chatDiv.find('.response').html(`<pre><code>${data.response}</code></pre>`);
+                    clearInterval(intervalId);
+hljs.highlightAll();
+                }
+            }).fail(function(xhr) {
+                console.error('Error polling for updates:', xhr.responseText);
+            });
+        }
+
+        function updateSessionTab(sessionId, prompt) {
+            const sessionTab = $(`.tab[data-session-id="${sessionId}"]`);
+            const truncatedPrompt = prompt.substring(0, 10) + '...';
+            sessionTab.text(truncatedPrompt);
+        }
+
+        function showSession(sessionId) {
+            $('.tab-content').removeClass('active').hide();
+            $('.tab').removeClass('active');
+            $(`#session-${sessionId}`).addClass('active').show();
+            $(`.tab[data-session-id="${sessionId}"]`).addClass('active');
+            $('.summon-agent-form').data('session-id', sessionId);
+            $('#session-id').val(sessionId);
+        }
+
+        $('.tab').on('click', function() {
+            const sessionId = $(this).data('session-id');
+            showSession(sessionId);
+        });
+
+        // Initialize with the first session active
+        if ($('.tab').length > 0) {
+            showSession($('.tab').first().data('session-id'));
+        }
+
+        // Initialize the model dropdown
+        populateModelDropdown($('#agent-type').val());
+    });
+    </script>
+</body>
+</html>

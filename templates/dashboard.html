@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Dashboard Sessions</title>
+    <!-- Tailwind CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss/dist/tailwind.min.css" rel="stylesheet">
+    <!-- Preline UI -->
+    <script src="https://unpkg.com/preline"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script> <!-- Add jQuery for AJAX -->
+    <style>
+        .tab-content { display: none; } /* Hide all tab contents by default */
+        .tab-content.active { display: block; } /* Show the active tab content */
+    </style>
+</head>
+<body class="bg-gray-900 text-white">
+    <div class="container mx-auto px-4 py-8">
+        <!-- Header -->
+        <div class="flex items-center justify-between">
+            <h2 class="text-2xl font-bold">Welcome, {{ current_user.username }}</h2>
+            <div>
+                <a href="{{ url_for('settings') }}" class="text-blue-400 hover:underline mr-4">Settings</a>
+                <a href="{{ url_for('logout') }}" class="text-blue-400 hover:underline">Logout</a>
+            </div>
+        </div>
+
+        <div class="mt-8 flex">
+            <!-- Sidebar for Chat Sessions (Vertical Tabs) -->
+            <div class="w-full md:w-1/4 bg-gray-800 rounded-lg p-4">
+                <h3 class="text-lg font-semibold mb-4">Chat Sessions</h3>
+
+                <!-- New Chat Session Form -->
+                <form id="new-session-form" method="POST" action="{{ url_for('new_chat_session') }}" class="space-y-4 mb-8">
+                    <button type="submit" class="w-full px-4 py-2 bg-green-600 hover:bg-green-700 rounded-md">Create New Session</button>
+                </form>
+
+                <!-- List of Chat Sessions -->
+                <div id="session-tabs" class="space-y-2">
+                    {% for session in sessions %}
+                        <div class="cursor-pointer p-2 bg-gray-700 rounded-md text-blue-400 hover:bg-gray-600 hover:text-blue-500 session-tab" 
+                             data-session-id="{{ session.id }}">
+                            {{ session.session_name }}<br />
+                            {% if session.chats[0] is defined %}
+                            {{ session.chats[0].prompt | truncate(20) }}
+                            {% endif %}
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- Chat Display Area -->
+            <div class="w-full md:w-3/4 bg-gray-800 rounded-lg p-4 ml-0 md:ml-4 mt-8 md:mt-0">
+                <div id="chat-container">
+                    {% if sessions is not defined or not sessions %}
+                    <span class="Header">Click Create New Session to Start Woosting!</span>
+                    {% endif %}
+                    {% for session in sessions %}
+                        <div id="session-{{ session.id }}" class="tab-content">
+                            <h3 class="text-xl font-semibold mb-4">Chat Session: {{ session.session_name }}</h3>
+
+                            <div id="chats-{{ session.id }}" class="space-y-4 max-h-96 overflow-y-auto">
+                                {% for chat in session.chats | reverse %}
+                                    <div class="p-4 bg-gray-700 rounded-md"  data-chat-id="{{ chat.id }}">
+                                        <p><strong>Prompt:</strong> {{ chat.prompt }}</p>
+                                        <p><strong>Response:</strong> {{ chat.response or 'Processing...' }}</p>
+                                        <p class="text-sm text-gray-400">{{ chat.timestamp.strftime('%Y-%m-%d %I:%M %p') }}</p>
+                                    </div>
+                                {% endfor %}
+                            </div>
+
+                            <!-- Form to submit a new prompt for the session -->
+                            <!-- Form to submit a new prompt for the session -->
+<!-- Form to submit a new prompt for the session -->
+
+<form class="summon-agent-form mt-8 space-y-4" data-session-id="{{ session.id }}">
+            <div>
+                <label class="block mb-1" for="agent-type-{{ session.id }}">Agent Type:</label>
+                <select name="agent_type" required class="w-full px-4 py-2 bg-gray-700 text-white rounded-md" 
+                        id="agent-type-{{ session.id }}">
+                    <option value="openai" {% if session.agent_type == 'openai' %} selected {% endif %}>OpenAI</option>
+                    <option value="anthropic" {% if session.agent_type == 'anthropic' %} selected {% endif %}>Anthropic</option>
+                    <option value="other_agent" {% if session.agent_type == 'other_agent' %} selected {% endif %}>Other Agent</option>
+                </select>
+            </div>
+
+            <div id="model-dropdown-container-{{ session.id }}" style="display: {% if session.agent_type %} block {% else %} none {% endif %};">
+                <label class="block mb-1" for="model-used-{{ session.id }}">Model:</label>
+                <select name="model_used" class="w-full px-4 py-2 bg-gray-700 text-white rounded-md" id="model-used-{{ session.id }}">
+                    {% if session.agent_type == 'openai' %}
+                        <option value="gpt-3" {% if session.model_used == 'gpt-3' %} selected {% endif %}>GPT-3</option>
+                        <option value="gpt-4" {% if session.model_used == 'gpt-4' %} selected {% endif %}>GPT-4</option>
+                        <option value="o1-preview" {% if session.model_used == 'o1-preview' %} selected {% endif %}>O1 Preview</option>
+                    {% elif session.agent_type == 'anthropic' %}
+                        <option value="Claude" {% if session.model_used == 'Claude' %} selected {% endif %}>Claude</option>
+                        <option value="Claude 2" {% if session.model_used == 'Claude 2' %} selected {% endif %}>Claude 2</option>
+                    {% elif session.agent_type == 'other_agent' %}
+                        <option value="Model A" {% if session.model_used == 'Model A' %} selected {% endif %}>Model A</option>
+                        <option value="Model B" {% if session.model_used == 'Model B' %} selected {% endif %}>Model B</option>
+                    {% endif %}
+                </select>
+            </div>
+            <div>
+                <label class="block mb-1" for="role-type{{ session.id }}">Model Role:</label>
+                <select name="role_type" required class="w-full px-4 py-2 bg-gray-700 text-white rounded-md" 
+                        id="role-type-{{ session.id }}">
+                            <option value="">Select a role...</option>
+                            <option value="You are a professional who develops and optimizes machine learning models to improve performance and scalability.">Machine Learning Engineer</option>
+                            <option value="You are a specialist who analyzes large datasets to extract insights and build predictive models for decision-making.">Data Scientist</option>
+                            <option value="You are a developer who designs and implements software systems that support various applications and services.">Software Engineer</option>
+                            <option value="You are a visionary who defines product strategy and ensures alignment with customer needs and business goals.">Product Manager</option>
+                            <option value="You are an overseer who manages the planning and execution of development projects, ensuring timely delivery and quality.">Technical Program Manager</option>
+                            <option value="You are a helper who provides technical support and troubleshooting assistance to users of various products.">Customer Support Specialist</option>
+                            <option value="You are a manager who oversees infrastructure and deployment pipelines to ensure smooth operations of applications.">DevOps Engineer</option>
+                            <option value="You are a builder who constructs and maintains data pipelines and databases used for analysis and reporting.">Data Engineer</option>
+                            <option value="You are a designer who creates scalable cloud infrastructure for application deployment and data storage.">Cloud Infrastructure Architect</option>
+                            <option value="You are a tester who ensures software systems function accurately and meet performance standards.">Quality Assurance Engineer</option>
+                            <option value="You are a strategist who identifies opportunities for product expansion and establishes strategic partnerships.">Business Development Manager</option>
+                            <option value="You are a researcher who studies user behavior to inform product design and improve usability.">User Experience (UX) Researcher</option>
+                            <option value="You are a reviewer who monitors and reviews user-generated content to ensure compliance with guidelines and policies.">Content Moderator</option>
+                            <option value="You are a protector who implements security measures to safeguard systems and data from threats and vulnerabilities.">Security Engineer</option>
+                            <option value="You are a versatile developer who builds both front-end and back-end components of applications.">Full Stack Developer</option>
+                            <option value="You are an overseer who manages day-to-day operations to ensure efficiency and productivity within the organization.">Operations Manager</option>
+                            <option value="You are a promoter who develops and executes marketing strategies to enhance product visibility and sales.">Marketing Manager</option>
+                            <option value="You are a technical expert who supports the sales team by providing expertise during the sales process.">Sales Engineer</option>
+                            <option value="You are a facilitator who manages recruitment, employee relations, and organizational development.">Human Resources Specialist</option>
+                            <option value="You are a legal advisor who provides guidance on various issues, including contracts and regulatory compliance.">Legal Counsel</option>
+                            <option value="You are a compliance expert who ensures systems adhere to data protection regulations and best practices.">Data Privacy Officer</option>
+                            <option value="You are a planner who conducts financial analysis and reporting to support business decisions.">Financial Analyst</option>
+                            <option value="You are a talent scout who sources and interviews candidates to fill open positions within the company.">Recruiter</option>
+                            <option value="You are a communicator who creates documentation and instructional content for products and services.">Technical Writer</option>
+                            <option value="You are a coordinator who oversees logistics and supply chain operations to ensure timely product delivery.">Supply Chain Manager</option>
+                            <option value="You are a relationship manager who maintains and strengthens connections with key clients, addressing their needs.">Account Manager</option>
+                            <option value="You are a communicator who manages the company's image and media relations to promote a positive public perception.">Public Relations Specialist</option>
+                            <option value="You are an organizer who provides administrative support to executives, handling scheduling and correspondence.">Executive Assistant</option>
+                            <option value="You are a creator who develops visual content for marketing, branding, and communication efforts.">Graphic Designer</option>
+                            <option value="You are an educator who develops and delivers training programs for employees and customers.">Training Specialist</option>
+                            <option value="You are a planner who organizes corporate events, including conferences, meetings, and product launches.">Event Coordinator</option>
+                            <option value="You are a supervisor who ensures that workplace facilities are maintained and meet the needs of the organization.">Facilities Manager</option>
+                            <option value="You are a troubleshooter who assists users with hardware and software issues to ensure smooth technology operation.">IT Support Specialist</option>
+                            <option value="You are a marketer who creates and manages online campaigns to drive engagement and conversion.">Digital Marketing Specialist</option>
+                            <option value="You are a planner who develops content plans to align with marketing goals and audience needs.">Content Strategist</option>
+                            <option value="You are a steward who ensures that the brand message is consistent across all channels and platforms.">Brand Manager</option>
+                            <option value="You are a guardian who ensures that the organization adheres to legal standards and internal policies.">Compliance Officer</option>
+                            <option value="You are a maintainer who manages and configures computer systems and servers for optimal performance.">Systems Administrator</option>
+                            <option value="You are a designer who develops and manages network infrastructure to ensure reliable connectivity.">Network Engineer</option>
+                            <option value="You are an investigator who conducts research and analyzes data to support business decisions.">Research Analyst</option>
+                            <option value="You are a manager who oversees financial reporting, budgeting, and compliance with regulations.">Financial Controller</option>
+                            <option value="You are a creator who designs products with a focus on user experience and functionality.">Product Designer</option>
+                            <option value="You are a builder who creates and maintains websites to ensure they are functional and user-friendly.">Web Developer</option>
+                            <option value="You are a problem solver who provides technical assistance and solutions to customers using software products.">Technical Support Engineer</option>
+                            <option value="You are a communicator who manages the company's social media presence and engages with the audience.">Social Media Manager</option>
+                            <option value="You are a leader who oversees the sales team and develops strategies to achieve sales targets.">Sales Manager</option>
+                            <option value="You are a monitor who manages stock levels and ensures the timely replenishment of inventory.">Inventory Manager</option>
+                            <option value="You are a visual creator who produces images and designs for various media and marketing needs.">Graphic Artist</option>
+                            <option value="You are a helper who provides on-site support for computer systems and software in the workplace.">Desktop Support Technician</option>
+                            <option value="You are a strategist who develops marketing plans to promote specific products and drive sales.">Product Marketing Manager</option>
+                            <option value="You are a director who oversees online sales operations and strategies to increase revenue.">E-commerce Manager</option>
+                            <option value="You are a leader who sets the technology vision and strategy for the organization.">Chief Technology Officer (CTO)</option>
+                            <option value="You are a financial leader who manages the company's finances and provides strategic guidance.">Chief Financial Officer (CFO)</option>
+                            <option value="You are an educator who develops and implements training programs for employees to enhance skills.">Corporate Trainer</option>
+                            <option value="You are a researcher who gathers and analyzes data on consumer preferences and market trends.">Market Research Analyst</option>
+                            <option value="You are a champion who ensures a positive and seamless experience for customers throughout their journey.">Customer Experience Manager</option>
+                            <option value="You are a maintainer who manages and supports the organization’s computer networks and systems.">Network Administrator</option>
+                            <option value="You are a researcher who analyzes policies and their impacts to provide recommendations for improvement.">Policy Analyst</option>
+                        
+                </select>
+            </div>
+            <div>
+                <label class="block mb-1" for="prompt-{{ session.id }}">Enter your prompt:</label>
+                <textarea name="prompt" rows="4" required class="w-full px-4 py-2 bg-gray-700 text-white rounded-md" id="prompt-{{ session.id }}"></textarea>
+            </div>
+            
+            <input type="hidden" name="session_id" id="session-id-{{ session.id }}" value="{{ session.id }}">
+
+            <div>
+                <button type="submit" class="w-full px-4 py-2 bg-green-600 hover:bg-green-700 rounded-md" id="submit-btn-{{ session.id }}">Summon AI Agent</button>
+            </div>
+        </form>
+   
+
+
+
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript to manage tab switching and handle AJAX for new sessions -->
+    <script>
+    $(document).ready(function() {
+
+
+        // Show model dropdown if agent type is selected
+    // Static model list based on agent type
+    const models = {
+        'openai': ['gpt-3', 'gpt-4', 'o1-preview'],
+        'anthropic': ['Claude', 'Claude 2'],
+        'other_agent': ['Model A', 'Model B'] // Add other agents as necessary
+    };
+
+    // Function to populate model dropdown based on agent type
+      // Function to populate model dropdown based on agent type
+      function populateModelDropdown(sessionId, agentType, selectedModel) {
+        const modelDropdown = $(`#model-used-${sessionId}`);
+        modelDropdown.empty(); // Clear existing options
+
+        if (agentType in models) {
+            models[agentType].forEach(model => {
+                modelDropdown.append($('<option>', {
+                    value: model,
+                    text: model,
+                    selected: model === selectedModel // Set selected based on saved model
+                }));
+            });
+            $(`#model-dropdown-container-${sessionId}`).show();
+        } else {
+            $(`#model-dropdown-container-${sessionId}`).hide();
+        }
+    }
+
+    // Initialize the model dropdowns for existing sessions
+    $('[id^="agent-type-"]').each(function() {
+        const sessionId = $(this).attr('id').split('-')[2]; // Extract session ID
+        const agentType = $(this).val(); // Get the selected agent type
+        const selectedModel = $(`#model-used-${sessionId}`).val(); // Get the saved model
+        populateModelDropdown(sessionId, agentType, selectedModel);
+    });
+
+    // Show/hide model dropdown based on agent type change
+    $('[id^="agent-type-"]').on('change', function() {
+        const sessionId = $(this).attr('id').split('-')[2]; // Extract session ID
+        const selectedAgentType = $(this).val();
+        const selectedModel = $(`#model-used-${sessionId}`).val(); // Get the currently selected model
+        populateModelDropdown(sessionId, selectedAgentType, selectedModel);
+    });
+
+    // Handle form submission via AJAX
+    $('.summon-agent-form').on('submit', function(e) {
+        e.preventDefault(); // Prevent default form submission
+        const formData = $(this).serialize(); // Serialize the form data
+        const sessionId = $(this).data('session-id'); // Get the session ID from data attribute
+        const prompt = $(this).find('textarea[name="prompt"]').val(); // Get the user prompt
+        const date = new Date();
+        const options = {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true // To use AM/PM format
+        };
+
+        // Get the formatted string with slashes (month/day/year by default)
+        let formattedDate = date.toLocaleString('en-US', options);
+
+// Extract date and time parts
+const [datePart, timePart] = formattedDate.split(', ');
+
+// Rearrange the date part to YYYY-MM-DD format
+const [month, day, year] = datePart.split('/'); // Default format is MM/DD/YYYY
+const formattedDatePart = `${year}-${month}-${day}`;
+
+// Combine the reordered date and time parts
+const finalFormattedDate = `${formattedDatePart} ${timePart}`;
+const tempChatId = `temp-${sessionId}-${Date.now()}`;  // Temporary ID for the chat
+        // Immediately update the chat window with the user's prompt
+        const chatHtml = `
+        <div class="p-4 bg-gray-700 rounded-md" id="${tempChatId}">
+        <p><strong>Prompt:</strong> ${prompt}</p>
+        <p><strong>Response:</strong> Processing...</p>
+        <p class="text-sm text-gray-400">${finalFormattedDate}</p>
+        </div>`;
+        
+
+        $(`#chats-${sessionId}`).prepend(chatHtml);
+        // Send AJAX request to the server
+        $.ajax({
+            url: '/summon_agent',
+            type: 'POST',
+            data: formData,
+            success: function(response) {
+                // Append new chat to the chat container
+                const chatId = response.chat_id;
+         
+                $(`#${tempChatId}`).attr('data-chat-id', chatId);
+            // Start polling for updates (pass chatId)
+            const intervalId = setInterval(function() {
+                pollForUpdates(chatId, intervalId);
+            }, 500);
+                  
+                var truncatedPrompt = response.prompt.substring(0, 13);
+                
+                if (truncatedPrompt) {
+                    if (response.prompt.length >= 20) { 
+                        truncatedPrompt += "..."; 
+                    }
+                    const sessionTab = $(`.session-tab[data-session-id="${sessionId}"]`);
+                    const originalTitle = sessionTab.text(); // Get the original session name
+                    sessionTab.html(`${finalFormattedDate}<br />${truncatedPrompt}`);
+                }
+            },
+            error: function(xhr) {
+                console.error('Error in AJAX request:', xhr.responseText);
+                alert('An error occurred: ' + xhr.responseText);
+            }
+        });
+    });
+
+    // Polling function for updates
+    function pollForUpdates(chatId, intervalId) {
+        $.get(`/check_response/${chatId}`, function(data) {
+        if (data.response) {
+            // Find the chat block by its data-chat-id and update the response
+            const chatDiv = $(`div[data-chat-id="${chatId}"]`);
+            chatDiv.find('p:contains("Processing")').html(`<strong>Response:</strong> ${data.response}`);
+            
+            // Stop polling once the response is received
+            clearInterval(intervalId);
+        }
+    }).fail(function(xhr) {
+        console.error('Error polling for updates:', xhr.responseText);
+    });
+    }
+
+
+
+        // Initialize the first tab to show
+        $('.tab-content').hide();
+        $('.tab-content').first().show().addClass('active');
+
+        // Handle session tab clicks
+        $('.session-tab').on('click', function() {
+            const sessionId = $(this).data('session-id');
+
+            // Remove active class from all tabs and contents
+            $('.session-tab').removeClass('active');
+            $('.tab-content').removeClass('active').hide();
+
+            // Add active class to the clicked tab and corresponding content
+            $(this).addClass('active');
+            $(`#session-${sessionId}`).addClass('active').show();
+        });
+    });
+    </script>
+</body>
+</html>
